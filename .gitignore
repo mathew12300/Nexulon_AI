@@ -1,2 +1,9 @@
-node_modules
-node_modules
+# Ignore dependencies
+node_modules/
+
+# Ignore SQLite database
+db.sqlite
+
+# Ignore Python virtual environment
+venv/
+
