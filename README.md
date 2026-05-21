@@ -14,11 +14,13 @@ An AI-powered career platform that accelerates professional growth through intel
 - PostgreSQL 13+
 
 ### Backend Setup
-```bash
-cd backend
+```powershell
+cd "C:\Users\jwmat\OneDrive\Desktop\Nexulon_AI"
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+.\venv\Scripts\Activate.ps1   # PowerShell
+# OR in Command Prompt:
+# venv\Scripts\activate.bat
+pip install -r backend_requirements.txt
 python manage.py migrate
 python manage.py runserver
 ```

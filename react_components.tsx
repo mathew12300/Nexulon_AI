@@ -1,7 +1,7 @@
 // React Component Library - Nexulon AI
 // TypeScript examples for key UI components
 
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 
 // ============================================
@@ -208,7 +208,7 @@ export const Stat: React.FC<StatProps> = ({ label, value, change, icon }) => (
         <p className="text-3xl font-bold text-white">{value}</p>
         {change !== undefined && (
           <p className={`text-sm mt-2 ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {change >= 0 ? '↑' : '↓'} {Math.abs(change)}% from last month
+            {change >= 0 ? 'up' : 'down'} {Math.abs(change)}% from last month
           </p>
         )}
       </div>

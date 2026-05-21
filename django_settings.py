@@ -4,22 +4,41 @@ Production-ready configuration
 """
 
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlparse
 from decouple import config
 
-# Build paths inside the project
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Build paths inside the project. This settings file lives at the project root.
+BASE_DIR = Path(__file__).resolve().parent
 
 # SECURITY
-SECRET_KEY = config('SECRET_KEY', default='dev-key-change-in-production')
-DEBUG = config('DEBUG', default=False, cast=bool)
+SECRET_KEY = config(
+    'SECRET_KEY',
+    default='dev-key-change-in-production-7f6c946a1b294f52b837a05a13f6d284',
+)
+
+
+def env_bool(name, default=False):
+    value = config(name, default=default)
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {'1', 'true', 'yes', 'on', 'debug', 'development', 'dev'}:
+        return True
+    if normalized in {'0', 'false', 'no', 'off', 'release', 'production', 'prod'}:
+        return False
+    return bool(default)
+
+
+DEBUG = env_bool('DEBUG', default=False)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 # CORS
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://localhost:5173'
+    default='http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173'
 ).split(',')
 
 # Applications
@@ -80,18 +99,56 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='nexulon_db'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default='postgres'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default=5432),
-        'ATOMIC_REQUESTS': True,
-        'CONN_MAX_AGE': 600,
+DATABASE_URL = config('DATABASE_URL', default='')
+DB_ENGINE = config('DB_ENGINE', default='django.db.backends.sqlite3')
+if DATABASE_URL:
+    parsed_database_url = urlparse(DATABASE_URL)
+    if parsed_database_url.scheme in {'postgres', 'postgresql'}:
+        DB_ENGINE = 'django.db.backends.postgresql'
+        DATABASES = {
+            'default': {
+                'ENGINE': DB_ENGINE,
+                'NAME': parsed_database_url.path.lstrip('/'),
+                'USER': parsed_database_url.username or '',
+                'PASSWORD': parsed_database_url.password or '',
+                'HOST': parsed_database_url.hostname or 'localhost',
+                'PORT': parsed_database_url.port or 5432,
+                'ATOMIC_REQUESTS': True,
+                'CONN_MAX_AGE': 600,
+            }
+        }
+    elif parsed_database_url.scheme == 'sqlite':
+        DB_ENGINE = 'django.db.backends.sqlite3'
+        DATABASES = {
+            'default': {
+                'ENGINE': DB_ENGINE,
+                'NAME': parsed_database_url.path or str(BASE_DIR / 'db.sqlite3'),
+                'ATOMIC_REQUESTS': True,
+            }
+        }
+    else:
+        raise ValueError(f'Unsupported DATABASE_URL scheme: {parsed_database_url.scheme}')
+if DB_ENGINE == 'django.db.backends.sqlite3':
+    DATABASES = {
+        'default': {
+            'ENGINE': DB_ENGINE,
+            'NAME': config('DB_NAME', default=str(BASE_DIR / 'db.sqlite3')),
+            'ATOMIC_REQUESTS': True,
+        }
     }
-}
+elif not DATABASE_URL:
+    DATABASES = {
+        'default': {
+            'ENGINE': DB_ENGINE,
+            'NAME': config('DB_NAME', default='nexulon_db'),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default='postgres'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default=5432),
+            'ATOMIC_REQUESTS': True,
+            'CONN_MAX_AGE': 600,
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -110,7 +167,10 @@ USE_TZ = True
 # Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = config(
+    'STATICFILES_STORAGE',
+    default='django.contrib.staticfiles.storage.StaticFilesStorage',
+)
 
 # Media files
 MEDIA_URL = '/media/'
@@ -192,9 +252,9 @@ LOGGING = {
             'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
         },
-        'json': {
-            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(asctime)s %(name)s %(levelname)s %(message)s',
+        'file': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
         },
     },
     'handlers': {
@@ -205,7 +265,7 @@ LOGGING = {
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': BASE_DIR / 'logs' / 'nexulon.log',
-            'formatter': 'json',
+            'formatter': 'file',
             'maxBytes': 1024 * 1024 * 10,  # 10MB
             'backupCount': 10,
         },
@@ -221,10 +281,14 @@ LOGGING = {
 }
 
 # Security Settings (Production)
+IS_RUNSERVER = 'runserver' in sys.argv
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', default=not IS_RUNSERVER)
+    SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', default=not IS_RUNSERVER)
+    CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', default=not IS_RUNSERVER)
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=0 if IS_RUNSERVER else 31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=not IS_RUNSERVER)
+    SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', default=not IS_RUNSERVER)
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_SECURITY_POLICY = {
         'default-src': ("'self'",),
@@ -235,6 +299,8 @@ if not DEBUG:
 
 # External Services
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
+OPENROUTER_MODEL = config('OPENROUTER_MODEL', default='openai/gpt-4o-mini')
 ELASTICSEARCH_HOST = config('ELASTICSEARCH_HOST', default='localhost:9200')
 AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default='')
 AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default='')
@@ -266,6 +332,6 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Nexulon AI API',
     'DESCRIPTION': 'AI-powered career platform API',
     'VERSION': '1.0.0',
-    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
     'SCHEMA_PATH_PREFIX': '/api/v1',
 }

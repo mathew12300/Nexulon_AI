@@ -5,12 +5,11 @@ FROM node:18-alpine as builder
 
 WORKDIR /app
 
-# Copy package files
-COPY frontend_package.json package.json
-COPY package-lock.json .
+# Copy package file
+COPY package.json .
 
 # Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # Copy source
 COPY . .

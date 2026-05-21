@@ -31,9 +31,12 @@ docker-compose up -d
 ```
 
 ### Option 2: Manual Setup
-```bash
+```powershell
 # Backend
-python -m venv venv && source venv/bin/activate
+python -m venv venv
+.\venv\Scripts\Activate.ps1   # PowerShell
+# OR in Command Prompt:
+# venv\Scripts\activate.bat
 pip install -r backend_requirements.txt
 python manage.py migrate
 python manage.py runserver
